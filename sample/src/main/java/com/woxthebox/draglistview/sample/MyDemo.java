@@ -9,7 +9,7 @@ import android.support.v7.app.AppCompatActivity;
 import android.view.View;
 
 /**
- * Created by ZhouHaitao on 16/6/23.
+ * Created by zht on 16/6/23.
  */
 public class MyDemo extends AppCompatActivity{
     @Override
