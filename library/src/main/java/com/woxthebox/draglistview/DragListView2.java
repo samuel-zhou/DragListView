@@ -21,13 +21,13 @@ import android.graphics.drawable.Drawable;
 import android.support.v7.widget.DefaultItemAnimator;
 import android.support.v7.widget.RecyclerView;
 import android.util.AttributeSet;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.FrameLayout;
+import android.widget.LinearLayout;
 
-public class DragListView extends FrameLayout {
+public class DragListView2 extends FrameLayout {
 
     public interface DragListListener {
         void onItemDragStarted(int position);
@@ -35,6 +35,8 @@ public class DragListView extends FrameLayout {
         void onItemDragging(int itemPosition, float x, float y);
 
         void onItemDragEnded(int fromPosition, int toPosition);
+
+        void onItemDragRemoved(int itemPosition,Object itemData);
     }
 
     public static abstract class DragListListenerAdapter implements DragListListener {
@@ -49,12 +51,19 @@ public class DragListView extends FrameLayout {
         @Override
         public void onItemDragEnded(int fromPosition, int toPosition) {
         }
+
+        @Override
+        public void onItemDragRemoved(int itemPosition,Object itemData){}
     }
 
     public interface DragListCallback {
         boolean canDragItemAtPosition(int dragPosition);
 
         boolean canDropItemAtPosition(int dropPosition);
+
+        boolean onHandleMoveInLeftView(float x,float y);
+
+        boolean onHandleMoveEndInLeftView(float x,float y);
     }
 
     public static abstract class DragListCallbackAdapter implements DragListCallback {
@@ -76,26 +85,38 @@ public class DragListView extends FrameLayout {
     private float mTouchX;   //DragListView中的触摸点X
     private float mTouchY;   //DragListView中的触摸点Y
 
-    public DragListView(Context context) {
+    public DragListView2(Context context) {
         super(context);
     }
 
-    public DragListView(Context context, AttributeSet attrs) {
+    public DragListView2(Context context, AttributeSet attrs) {
         super(context, attrs);
     }
 
-    public DragListView(Context context, AttributeSet attrs, int defStyleAttr) {
+    public DragListView2(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
     }
 
     @Override
     protected void onFinishInflate() {
         super.onFinishInflate();
+        LinearLayout container = new LinearLayout(getContext());
+        leftView = new FrameLayout(getContext());
+        container.setOrientation(LinearLayout.HORIZONTAL);
+        container.addView(leftView,new LinearLayout.LayoutParams(0,LinearLayout.LayoutParams.MATCH_PARENT));
+        addView(container,new LayoutParams(LayoutParams.MATCH_PARENT,LayoutParams.MATCH_PARENT));
+
         mDragItem = new DragItem(getContext());
         mRecyclerView = createRecyclerView();
         mRecyclerView.setDragItem(mDragItem);
-        addView(mRecyclerView);
+        container.addView(mRecyclerView,new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,LinearLayout.LayoutParams.MATCH_PARENT));
         addView(mDragItem.getDragItemView());
+    }
+
+    private FrameLayout leftView;
+
+    public FrameLayout getLeftView(){
+        return leftView;
     }
 
     @Override
@@ -111,22 +132,66 @@ public class DragListView extends FrameLayout {
     }
 
     private boolean handleTouchEvent(MotionEvent event) {
+        mDragItem.setOffset(mRecyclerView.getLeft(),0);
         mTouchX = event.getX();
         mTouchY = event.getY();
-        Log.d("===","DragListView onTouchX,onTouchY = "+mTouchX+","+mTouchY);
+//        Log.d("===","DragListView onTouchX,onTouchY = "+mTouchX+","+mTouchY+"  mRecycleView.getLeft()="+mRecyclerView.getLeft());
         if (isDragging()) {
             switch (event.getAction()) {
                 case MotionEvent.ACTION_MOVE:
-                    mRecyclerView.onDragging(event.getX(), event.getY());
+                    if(isDragInLeftView()) {
+                        float x = Math.max(leftView.getLeft(),getDragItemLeft());
+                        float y = Math.max(leftView.getTop(),getDragItemTop());
+                        if(mDragListCallback != null){
+                            mDragListCallback.onHandleMoveInLeftView(x,y);
+                        }
+                        mRecyclerView.draggingOutOfRecyclerView(event.getX(), event.getY());
+                    }else {
+                        mRecyclerView.onDragging(event.getX(), event.getY());
+                    }
                     break;
                 case MotionEvent.ACTION_UP:
                 case MotionEvent.ACTION_CANCEL:
-                    mRecyclerView.onDragEnded();
+                    boolean handleInRecycle = true;
+                    if(isDragInLeftView()){
+                        if(mDragListCallback != null){
+                            float x = Math.max(leftView.getLeft(),getDragItemLeft());
+                            float y = Math.max(leftView.getTop(),getDragItemTop());
+                            boolean handled = mDragListCallback.onHandleMoveEndInLeftView(x,y);
+                            handleInRecycle = !handled;
+                        }
+                    }
+                    if(handleInRecycle) {
+                        mRecyclerView.onDragEnded();
+                    }else {
+                        mRecyclerView.onDragRemovedAndEnded();
+                    }
+
                     break;
             }
             return true;
         }
         return false;
+    }
+
+    //dragItem超过recyclerView左边一定的距离
+    private boolean isDragInLeftView(){
+        float dragItemLeft = getDragItemLeft();
+        float dragItemTop = getDragItemTop();
+        if(dragItemLeft < mRecyclerView.getLeft()*0.7) {
+            return true;
+        }
+        return false;
+    }
+
+    private float getDragItemLeft(){
+        float left = mDragItem.getX()-mDragItem.getDragItemView().getMeasuredWidth()/2+mRecyclerView.getLeft();
+        return left;
+    }
+
+    private float getDragItemTop(){
+        float top = mDragItem.getY()-mDragItem.getDragItemView().getMeasuredHeight()/2;
+        return top;
     }
 
     private DragItemRecyclerView createRecyclerView() {
@@ -162,8 +227,10 @@ public class DragListView extends FrameLayout {
             }
 
             @Override
-            public void onDragRemovedAndEnded(int itemPosition, Object removedItemData) {
-                //NA
+            public void onDragRemovedAndEnded(int itemPosition,Object removedItemData) {
+                if(mDragListListener != null){
+                    mDragListListener.onItemDragRemoved(itemPosition,removedItemData);
+                }
             }
         });
         recyclerView.setDragItemCallback(new DragItemRecyclerView.DragItemCallback() {
@@ -236,7 +303,18 @@ public class DragListView extends FrameLayout {
     }
 
     public void setCustomDragItem(DragItem dragItem) {
-        removeViewAt(1);
+        int indexOfDragView = -1;
+        int childViewCount = getChildCount();
+        for(int i=0;i<childViewCount;i++){
+            View view = getChildAt(i);
+            if(DragItem.DRAG_VIEW_TAG.equals(view.getTag())){
+                indexOfDragView = i;
+                break;
+            }
+        }
+        if(indexOfDragView != -1) {
+            removeViewAt(indexOfDragView);
+        }
 
         DragItem newDragItem;
         if (dragItem != null) {

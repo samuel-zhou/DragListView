@@ -556,6 +556,11 @@ public class BoardView extends HorizontalScrollView implements AutoScroller.Auto
                     mBoardListener.onItemDragEnded(mDragStartColumn, mDragStartRow, getColumnOfList(recyclerView), newItemPosition);
                 }
             }
+
+            @Override
+            public void onDragRemovedAndEnded(int itemPosition, Object removedItemData) {
+                //NA
+            }
         });
 
         recyclerView.setAdapter(adapter);
@@ -613,5 +618,9 @@ public class BoardView extends HorizontalScrollView implements AutoScroller.Auto
             scrollToColumn(newColumn, true);
             return true;
         }
+    }
+
+    public void setAutoScrollWhenReachEdge(boolean autoScrollWhenReachEdge){
+        mCurrentRecyclerView.setAutoScrollWhenReachEdge(autoScrollWhenReachEdge);
     }
 }

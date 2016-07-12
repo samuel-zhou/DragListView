@@ -30,29 +30,34 @@ import android.widget.FrameLayout;
 
 public class DragItem {
     protected static final int ANIMATION_DURATION = 250;
+    public static final String DRAG_VIEW_TAG = "drag_view";
     private View mDragView;
 
     private float mOffsetX;
     private float mOffsetY;
+    //dragView的中心点位置，不包含offset，随着拖动会变化
     private float mPosX;
     private float mPosY;
     private float mPosTouchDx;
     private float mPosTouchDy;
-    private float mAnimationDx;
-    private float mAnimationDy;
-    private boolean mCanDragHorizontally = true;
-    private boolean mSnapToTouch = true;
+    private float mAnimationDx = 0;  //已在startDrag中已禁止
+    private float mAnimationDy = 0;  //已在startDrag中已禁止
+    private boolean mCanDragHorizontally = true;  //是否可以横向拖动
+    private boolean mSnapToTouch = true;  //开始的时候移动到触摸的位置，已改为不起作用
 
     public DragItem(Context context) {
         mDragView = new View(context);
+        mDragView.setTag(DRAG_VIEW_TAG);
         hide();
     }
 
     public DragItem(Context context, int layoutId) {
         mDragView = View.inflate(context, layoutId, null);
+        mDragView.setTag(DRAG_VIEW_TAG);
         hide();
     }
 
+    //将要拖动的view的图像复制到dragView上
     public void onBindDragView(View clickedView, View dragView) {
         Bitmap bitmap = Bitmap.createBitmap(clickedView.getWidth(), clickedView.getHeight(), Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
@@ -65,6 +70,7 @@ public class DragItem {
         }
     }
 
+    //设置dragView的size
     public void onMeasureDragView(View clickedView, View dragView) {
         dragView.setLayoutParams(new FrameLayout.LayoutParams(clickedView.getMeasuredWidth(), clickedView.getMeasuredHeight()));
         int widthSpec = View.MeasureSpec.makeMeasureSpec(clickedView.getMeasuredWidth(), View.MeasureSpec.EXACTLY);
@@ -112,29 +118,30 @@ public class DragItem {
         onMeasureDragView(startFromView, mDragView);
         onStartDragAnimation(mDragView);
 
+        //getX() = TranslationX + getLeft(); getY()=TranslationY+getTop();
         float startX = startFromView.getX() - (mDragView.getMeasuredWidth() - startFromView.getMeasuredWidth()) / 2 + mDragView
                 .getMeasuredWidth() / 2;
         float startY = startFromView.getY() - (mDragView.getMeasuredHeight() - startFromView.getMeasuredHeight()) / 2 + mDragView
                 .getMeasuredHeight() / 2;
-
-        if (mSnapToTouch) {
-            mPosTouchDx = 0;
-            mPosTouchDy = 0;
-            setPosition(touchX, touchY);
-            setAnimationDx(startX - touchX);
-            setAnimationDY(startY - touchY);
-
-            PropertyValuesHolder pvhX = PropertyValuesHolder.ofFloat("AnimationDx", mAnimationDx, 0);
-            PropertyValuesHolder pvhY = PropertyValuesHolder.ofFloat("AnimationDY", mAnimationDy, 0);
-            ObjectAnimator anim = ObjectAnimator.ofPropertyValuesHolder(this, pvhX, pvhY);
-            anim.setInterpolator(new DecelerateInterpolator());
-            anim.setDuration(ANIMATION_DURATION);
-            anim.start();
-        } else {
+//        Log.d("===","startX="+startX+" startY="+startY);
+//        if (mSnapToTouch) {
+//            mPosTouchDx = 0;
+//            mPosTouchDy = 0;
+//            setPosition(touchX, touchY);
+//            setAnimationDx(startX - touchX);
+//            setAnimationDY(startY - touchY);
+//
+//            PropertyValuesHolder pvhX = PropertyValuesHolder.ofFloat("AnimationDx", mAnimationDx, 0);
+//            PropertyValuesHolder pvhY = PropertyValuesHolder.ofFloat("AnimationDY", mAnimationDy, 0);
+//            ObjectAnimator anim = ObjectAnimator.ofPropertyValuesHolder(this, pvhX, pvhY);
+//            anim.setInterpolator(new DecelerateInterpolator());
+//            anim.setDuration(ANIMATION_DURATION);
+//            anim.start();
+//        } else {
             mPosTouchDx = startX - touchX;
             mPosTouchDy = startY - touchY;
             setPosition(touchX, touchY);
-        }
+//        }
     }
 
     void endDrag(View endToView, AnimatorListenerAdapter listener) {
@@ -186,6 +193,7 @@ public class DragItem {
     void setPosition(float touchX, float touchY) {
         mPosX = touchX + mPosTouchDx;
         mPosY = touchY + mPosTouchDy;
+//        Log.d("===","mPosX,mPosY = "+mPosX+","+mPosY);
         updatePosition();
     }
 
@@ -196,8 +204,11 @@ public class DragItem {
     }
 
     void updatePosition() {
+        //控制dragView显示的位置的代码
         if (mCanDragHorizontally) {
             mDragView.setX(mPosX + mOffsetX + mAnimationDx - mDragView.getMeasuredWidth() / 2);
+        }else {
+            mDragView.setX(mOffsetX);
         }
 
         mDragView.setY(mPosY + mOffsetY + mAnimationDy - mDragView.getMeasuredHeight() / 2);
